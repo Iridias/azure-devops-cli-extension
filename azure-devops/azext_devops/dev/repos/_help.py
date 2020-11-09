@@ -31,6 +31,12 @@ def load_repos_help():
     long-summary:
     """
 
+    helps['repos pr statuses'] = """
+    type: group
+    short-summary: Manage pull request statuses.
+    long-summary:
+    """
+
     helps['repos pr work-item'] = """
     type: group
     short-summary: Manage work items associated with pull requests.

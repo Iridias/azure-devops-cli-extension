@@ -8,9 +8,9 @@ import webbrowser
 from knack.log import get_logger
 from knack.util import CLIError
 from azext_devops.devops_sdk.exceptions import AzureDevOpsClientRequestError
-from azext_devops.devops_sdk.v5_0.git.models import (GitPullRequest, GitPullRequestCompletionOptions,
+from azext_devops.devops_sdk.v5_0.git.models import (GitPullRequest, GitPullRequestCompletionOptions, GitStatusContext,
                                                      GitPullRequestSearchCriteria, IdentityRef, IdentityRefWithVote,
-                                                     ResourceRef, GitRefFavorite)
+                                                     ResourceRef, GitRefFavorite, GitPullRequestStatus)
 from azext_devops.devops_sdk.v5_0.work_item_tracking.models import JsonPatchOperation, WorkItemRelation
 from azext_devops.dev.common.arguments import should_detect
 from azext_devops.dev.common.git import get_current_branch_name, resolve_git_ref_heads, fetch_remote_and_checkout
@@ -589,6 +589,76 @@ def queue_pr_policy(id, evaluation_id, organization=None, detect=None):  # pylin
     policy_client = get_policy_client(organization)
     return policy_client.requeue_policy_evaluation(project=pr.repository.project.id,
                                                    evaluation_id=evaluation_id)
+
+
+def list_pull_request_statuses(pull_request_id, iteration_id=None, repository=None, organization=None,
+                               project=None, detect=None):
+    """Get all the statuses associated with a pull request.
+    :param int pull_request_id: ID of the pull request.
+    :param int iteration_id: ID of the iteration to associate status with. Minimum value is 1.
+    :param str repository: Name or ID of the repository.
+    :param str organization: The URI for the AZDO account (https://dev.azure.com/<account>/)
+    :param str project: Name or ID of the project.
+    :param str detect: When 'On' unsupplied arg values will be detected from the current working directory's repo.
+    """
+    try:
+        team_instance, project, repository = resolve_instance_project_and_repo(
+                                                detect=detect,
+                                                organization=organization,
+                                                project=project,
+                                                repo=repository)
+        git_client = get_git_client(team_instance)
+        if iteration_id is not None:
+            return git_client.get_pull_request_iteration_status(repository_id=repository,
+                                                                pull_request_id=pull_request_id,
+                                                                iteration_id=iteration_id,
+                                                                project=project)
+        return git_client.get_pull_request_statuses(repository_id=repository,
+                                                    pull_request_id=pull_request_id,
+                                                    project=project)
+    except Exception as ex:
+        raise ex
+
+
+def create_pull_request_status(pull_request_id, state, name, description=None, genre=None, target_url=None,
+                               iteration_id=None, repository=None, organization=None, project=None, detect=None):
+    """Create a pull request status.
+    :param int pull_request_id: ID of the pull request.
+    :param str state: State of the status, supported are ['notSet', 'pending', 'succeeded', 'failed', 'error']
+    :param str name: Name identifier of the status, cannot be null or empty.
+    :param str description: Status description. Typically describes current state of the status.
+    :param str genre: Genre of the status. Typically name of the service/tool generating the status, can be empty.
+    :param str target_url: URL with status details.
+    :param int iteration_id: ID of the iteration to associate status with. Minimum value is 1.
+    :param str repository: Name or ID of the repository.
+    :param str organization: The URI for the AZDO account (https://dev.azure.com/<account>/)
+    :param str project: Name or ID of the project.
+    :param str detect: When 'On' unsupplied arg values will be detected from the current working directory's repo.
+    """
+    try:
+        team_instance, project, repository = resolve_instance_project_and_repo(
+                                                detect=detect,
+                                                organization=organization,
+                                                project=project,
+                                                repo=repository)
+        git_client = get_git_client(team_instance)
+        context = GitStatusContext(genre=genre, name=name)
+        status = GitPullRequestStatus(context=context,
+                                      state=state,
+                                      description=description,
+                                      target_url=target_url)
+        if iteration_id is not None:
+            return git_client.create_pull_request_iteration_status(status=status,
+                                                                   repository_id=repository,
+                                                                   pull_request_id=pull_request_id,
+                                                                   iteration_id=iteration_id,
+                                                                   project=project)
+        return git_client.create_pull_request_status(status=status,
+                                                     repository_id=repository,
+                                                     pull_request_id=pull_request_id,
+                                                     project=project)
+    except Exception as ex:
+        raise ex
 
 
 def _resolve_reviewers_as_refs(reviewers, organization):
